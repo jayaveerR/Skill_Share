@@ -81,6 +81,12 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    aiAnalysis: {
+      isFake: Boolean,
+      confidenceScore: Number,
+      reasoning: String,
+      lastAnalyzed: Date
+    }
   },
   {
     timestamps: true,

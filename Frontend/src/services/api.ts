@@ -15,12 +15,21 @@ export interface ExploreUser {
   _id: string;
   name: string;
   email: string;
+  avatar?: string;
+  bio?: string;
+  skills?: Array<{ name: string; level: string }>;
+  interests?: string[];
   averageRating?: number;
   totalRatings?: number;
   completedCollaborations?: number;
   trustScore?: number;
   isOnline?: boolean;
-  avatar?: string;
+  aiAnalysis?: {
+    isFake: boolean;
+    confidenceScore: number;
+    reasoning: string;
+    lastAnalyzed?: string;
+  };
 }
 
 export interface CommunityMember {
@@ -127,6 +136,16 @@ export const authAPI = {
 
   getUserProfile: async (id: string) => {
     const response = await api.get(`/auth/profile/${id}`);
+    return response.data;
+  },
+
+  getUsers: async () => {
+    const response = await api.get('/auth/users');
+    return response.data;
+  },
+
+  refreshAIAnalysis: async (id: string) => {
+    const response = await api.post(`/auth/analyze-profile/${id}`);
     return response.data;
   },
 };
@@ -256,7 +275,6 @@ export const ratingsAPI = {
   },
 };
 
-// Chat API
 // Chat API
 export const chatAPI = {
   createSession: async (requestId: string) => {

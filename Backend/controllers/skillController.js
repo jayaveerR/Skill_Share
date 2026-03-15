@@ -104,7 +104,7 @@ exports.getSkills = async (req, res) => {
         }
 
         const skills = await Skill.find(query)
-            .populate('createdBy', 'name email avatar averageRating totalRatings completedCollaborations trustScore isOnline lastSeen')
+            .populate('createdBy', 'name email avatar averageRating totalRatings completedCollaborations trustScore isOnline lastSeen aiAnalysis')
             .sort({ createdAt: -1 });
 
         // Apply AI-like scoring and insights

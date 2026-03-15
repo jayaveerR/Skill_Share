@@ -6,6 +6,8 @@ const {
   getMe,
   updateProfile,
   getUserProfile,
+  getAllUsers,
+  refreshAIAnalysis,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
@@ -15,6 +17,8 @@ router.post('/login', login);
 
 // Protected routes
 router.get('/me', protect, getMe);
+router.post('/analyze-profile/:id', protect, refreshAIAnalysis);
+router.get('/users', protect, getAllUsers);
 router.get('/profile/:id', protect, getUserProfile);
 router.put('/profile', protect, updateProfile);
 

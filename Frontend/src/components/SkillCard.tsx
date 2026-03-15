@@ -1,9 +1,9 @@
 import React, { useState, useEffect, forwardRef, Ref } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, Loader2, Star, TrendingUp, MessageSquare } from 'lucide-react';
+import { Trash2, Loader2, Star, TrendingUp, MessageSquare, Brain, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { skillsAPI, requestsAPI, ExploreSkill } from '@/services/api';
+import { skillsAPI, requestsAPI, authAPI, ExploreSkill } from '@/services/api';
 import { toast } from 'sonner';
 import {
     AlertDialog,
@@ -32,8 +32,32 @@ interface SkillProps {
 const SkillCard = forwardRef(({ skill, onRequest, onChat, onRemove, status, rejectedAt, isOwnSkill }: SkillProps, ref: Ref<HTMLDivElement>) => {
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
     const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
     const queryClient = useQueryClient();
     const navigate = useNavigate();
+
+    // AI Analysis Logic
+    const analyzeMutation = useMutation({
+        mutationFn: () => authAPI.refreshAIAnalysis(skill.createdBy?._id || ''),
+        onSuccess: (response) => {
+            if (response.success) {
+                toast.success('AI Analysis Completed');
+                queryClient.invalidateQueries({ queryKey: ['skills'] });
+            }
+            setIsAnalyzing(false);
+        },
+        onError: () => {
+            toast.error('AI Analysis failed');
+            setIsAnalyzing(false);
+        }
+    });
+
+    const handleAnalyze = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!skill.createdBy?._id) return;
+        setIsAnalyzing(true);
+        analyzeMutation.mutate();
+    };
 
     // Fetch requests to check for active collaborations (for the remove button state)
     const { data: requestsResponse } = useQuery({
@@ -129,6 +153,10 @@ const SkillCard = forwardRef(({ skill, onRequest, onChat, onRemove, status, reje
         ));
     };
 
+    const userAnalysis = skill.createdBy?.aiAnalysis;
+    const hasBeenAnalyzed = !!userAnalysis;
+    const isFake = userAnalysis?.isFake;
+
     return (
         <motion.div
             layout
@@ -149,7 +177,7 @@ const SkillCard = forwardRef(({ skill, onRequest, onChat, onRemove, status, reje
             <div>
                 <div className="flex items-start gap-4 mb-4">
                     <div
-                        className="flex-shrink-0 group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+                        className="flex-shrink-0 group-hover:scale-105 transition-transform duration-300 cursor-pointer relative"
                         onClick={() => skill.createdBy?._id && navigate(`/profile/${skill.createdBy._id}`)}
                     >
                         <Avatar className="h-12 w-12 border-2 border-primary/20 ring-2 ring-background">
@@ -159,6 +187,9 @@ const SkillCard = forwardRef(({ skill, onRequest, onChat, onRemove, status, reje
                             />
                             <AvatarFallback>{skill.createdBy?.name ? getInitials(skill.createdBy.name) : '??'}</AvatarFallback>
                         </Avatar>
+                        {skill.createdBy?.isOnline && (
+                             <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full shadow-sm" />
+                        )}
                     </div>
                     <div
                         className="flex-1 flex flex-col overflow-hidden cursor-pointer"
@@ -166,45 +197,61 @@ const SkillCard = forwardRef(({ skill, onRequest, onChat, onRemove, status, reje
                     >
                         <h4 className="font-bold text-foreground text-sm line-clamp-1 group-hover:text-primary transition-colors">
                             {skill.createdBy?.name || 'Unknown User'}
-                            {skill.createdBy?.isOnline && (
-                                <motion.span
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    className="ml-1.5 inline-block w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-background animate-pulse shadow-sm"
-                                    title="Online"
-                                />
-                            )}
                         </h4>
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{skill.category}</p>
-                        {skill.insights && skill.insights.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1.5">
-                                {skill.insights.map((insight, idx) => (
-                                    <span key={idx} className="text-[8px] font-black uppercase tracking-tighter text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-1 py-0.5 rounded border border-orange-100/50 dark:border-orange-900/30">
-                                        {insight}
-                                    </span>
-                                ))}
-                            </div>
+                        <p className="text-xs text-muted-foreground line-clamp-1">{skill.category}</p>
+                    </div>
+
+                    {/* AI Analysis Button */}
+                    <motion.button
+                        whileHover={{ scale: 1.1, rotate: 5 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={handleAnalyze}
+                        disabled={isAnalyzing}
+                        className={`p-1.5 rounded-lg border transition-all ${
+                            isAnalyzing 
+                            ? 'bg-primary/10 border-primary/20 animate-pulse' 
+                            : hasBeenAnalyzed 
+                                ? isFake 
+                                    ? 'bg-red-50 border-red-200 text-red-600' 
+                                    : 'bg-green-50 border-green-200 text-green-600'
+                                : 'bg-primary/5 border-primary/20 text-primary animate-pulse'
+                        }`}
+                        title="AI Deep Fake & Authenticity Analysis"
+                    >
+                        {isAnalyzing ? (
+                            <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                            <Brain size={16} className={!hasBeenAnalyzed ? "animate-pulse" : ""} />
                         )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1 ml-auto flex-shrink-0">
-                        <Badge variant="secondary" className="text-xs bg-secondary text-secondary-foreground hover:bg-secondary/80">
-                            {skill.level}
-                        </Badge>
-                        <div className="flex items-center gap-1.5 text-xs">
-                            {skill.createdBy?.averageRating ? (
-                                <div className="flex items-center bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-md font-bold">
-                                    <Star size={10} className="fill-current mr-0.5" />
-                                    <span>{skill.createdBy.averageRating.toFixed(1)}</span>
-                                    {skill.createdBy.totalRatings !== undefined && (
-                                        <span className="text-muted-foreground font-normal ml-0.5">({skill.createdBy.totalRatings})</span>
-                                    )}
-                                </div>
-                            ) : (
-                                <span className="text-muted-foreground font-normal italic">New</span>
-                            )}
-                        </div>
-                    </div>
+                    </motion.button>
                 </div>
+
+                {/* AI Analysis Result Section (Collapsible) */}
+                <AnimatePresence>
+                    {hasBeenAnalyzed && !isAnalyzing && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                            animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
+                            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                            className={`p-2 rounded-xl border flex flex-col gap-1 overflow-hidden ${
+                                isFake ? 'bg-red-50/50 border-red-100' : 'bg-green-50/30 border-green-100/50'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                    {isFake ? <ShieldAlert size={12} className="text-red-500" /> : <ShieldCheck size={12} className="text-green-500" />}
+                                    <span className={`text-[10px] font-black uppercase tracking-widest ${isFake ? 'text-red-600' : 'text-green-600'}`}>
+                                        {isFake ? 'Potential Fake Detection' : 'Real Profile Verified'}
+                                    </span>
+                                </div>
+                                <span className="text-[10px] font-bold opacity-70">{Math.round(userAnalysis.confidenceScore)}%</span>
+                            </div>
+                            <p className="text-[9px] text-muted-foreground line-clamp-1 italic">
+                                {userAnalysis.reasoning}
+                            </p>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 <div className="flex flex-wrap gap-1.5 mb-4">
                     {renderBadges()}
@@ -218,8 +265,11 @@ const SkillCard = forwardRef(({ skill, onRequest, onChat, onRemove, status, reje
                 </p>
 
                 <div className="flex items-center justify-between text-xs text-muted-foreground mb-6 bg-muted/30 border border-border/50 p-2 rounded-lg">
-                    <span>Collaborations:</span>
-                    <span className="font-semibold text-foreground">{skill.createdBy?.completedCollaborations || 0} ✅</span>
+                    <span>Member Rating:</span>
+                    <span className="font-bold text-foreground flex items-center gap-1">
+                        <Star size={10} className="fill-amber-400 text-amber-400" />
+                        {skill.createdBy?.averageRating?.toFixed(1) || '0.0'}
+                    </span>
                 </div>
             </div>
 
@@ -257,7 +307,7 @@ const SkillCard = forwardRef(({ skill, onRequest, onChat, onRemove, status, reje
                         ? 'bg-muted text-muted-foreground hover:bg-muted cursor-not-allowed'
                         : isOwnSkill
                             ? 'bg-secondary text-muted-foreground cursor-default'
-                            : 'bg-primary/5 hover:bg-primary/10 text-foreground dark:text-foreground border border-border'
+                            : 'bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/20'
                         } ${isRejectedLocked ? 'bg-red-100 text-red-500 hover:bg-red-100 cursor-not-allowed' : ''}`}
                     onClick={() => !isPending && !isOwnSkill && !isRejectedLocked && onRequest && onRequest(skill)}
                     disabled={isPending || isOwnSkill || isRejectedLocked}
@@ -296,6 +346,6 @@ const SkillCard = forwardRef(({ skill, onRequest, onChat, onRemove, status, reje
     );
 });
 
-SkillCard.displayName = "SkillCard"; // Add display name for debugging
+SkillCard.displayName = "SkillCard";
 
 export default SkillCard;

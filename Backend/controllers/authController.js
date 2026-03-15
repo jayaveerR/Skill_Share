@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { checkTextQuality, isUserSpamBlocked } = require('../utils/moderation');
+const { analyzeProfileAuthenticity } = require('../utils/profileAnalysis');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -250,6 +251,70 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error during profile update',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Get all users for Explore Dashboard
+// @route   GET /api/auth/users
+// @access  Private
+exports.getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find({ _id: { $ne: req.user._id } })
+      .select('name bio avatar skills interests aiAnalysis isOnline lastSeen createdAt');
+
+    res.status(200).json({
+      success: true,
+      data: users,
+    });
+  } catch (error) {
+    console.error('Get all users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Force trigger AI Analysis for a user
+// @route   POST /api/auth/profile/analyze/:id
+// @access  Private
+exports.refreshAIAnalysis = async (req, res) => {
+  try {
+    const userId = req.params.id || req.user._id;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    console.log(`[AI Trigger] Manual analysis requested for: ${user.name}`);
+
+    const analysis = await analyzeProfileAuthenticity({
+      name: user.name,
+      bio: user.bio,
+      skills: user.skills,
+      interests: user.interests
+    });
+
+    user.aiAnalysis = analysis;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      data: user.aiAnalysis,
+      message: 'AI Profile analysis refreshed successfully',
+    });
+  } catch (error) {
+    console.error('AI Analysis manual trigger error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to run AI analysis',
       error: error.message,
     });
   }
